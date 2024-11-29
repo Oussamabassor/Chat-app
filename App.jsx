@@ -1,55 +1,70 @@
-import React, { useEffect, useState } from "react";
-import { Chat, Channel, ChannelHeader, MessageInput, MessageList, Thread, Window } from "stream-chat-react";
-import { StreamChat } from "stream-chat";
-import { chatConfig } from "./Config";
-import "./App.css";
+import React, { useEffect, useState } from 'react';
+import {
+    Chat,
+    Channel,
+    ChannelHeader,
+    MessageInput,
+    MessageList,
+    Window,
+} from 'stream-chat-react';
+import { chatConfig } from './Config';
+import { StreamChat } from 'stream-chat';
+import 'stream-chat-react/dist/css/v2/index.css';
+import './App.css';
 
 const App = () => {
-    const [userToken, setUserToken] = useState(null);
     const [client, setClient] = useState(null);
+    const [user, setUser] = useState(null);
+    const [channel, setChannel] = useState(null);
 
     useEffect(() => {
-        // Fetch the user token from the server
-        fetch('http://localhost:3001/api/getUserToken', {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            mode: 'cors',
-        })
-        .then((response) => response.json())
-        .then((data) => {
-            setUserToken(data.token); // Store token in state
-        })
-        .catch((error) => {
-            console.error('Error fetching token:', error);
-        });
-    }, []); // Only runs on mount
+        const initializeChat = async () => {
+            const userId = prompt("Enter your user ID:");
+            if (!userId) {
+                console.error('No user ID provided');
+                return;
+            }
 
-    // Initialize client when userToken is available
-    useEffect(() => {
-        if (userToken) {
-            const newClient = StreamChat.getInstance(chatConfig.apiKey);
-            newClient.connectUser(
+            console.log('User ID:', userId);  // Check if userId is correctly set
+
+            const response = await fetch(`http://localhost:3001/api/getUserToken?userId=${userId}`);
+            if (!response.ok) {
+                throw new Error('Failed to fetch token');
+            }
+            const { token } = await response.json();
+
+            const chatClient = StreamChat.getInstance(chatConfig.apiKey);
+            await chatClient.connectUser(
                 {
-                    id: "Oussama123",
-                    name: "Oussama",
+                    id: userId,
+                    name: `User ${userId}`,
                 },
-                userToken
+                token
             );
-            setClient(newClient);
 
-            return () => {
-                newClient.disconnectUser();
-            };
-        }
-    }, [userToken]); // Runs when userToken is updated
+            const channel = chatClient.channel('messaging', 'general', {
+                name: 'General Chat',
+            });
 
-    if (!userToken || !client) {
-        return <div>Loading...</div>; // Show loading until token and client are available
-    }
+            await channel.watch();
 
-    const channel = client.channel("messaging", "react-chat", { name: "React Chat" });
+            setClient(chatClient);
+            setUser(userId);
+            setChannel(channel);
+        };
+
+        initializeChat().catch((error) => {
+            console.error('Error initializing chat:', error);
+        });
+
+        return () => {
+            if (client) {
+                client.disconnectUser();
+            }
+        };
+    }, [client]);
+
+    if (!client || !channel) return <div>Loading...</div>;
 
     return (
         <div className="chat-container">
@@ -60,8 +75,9 @@ const App = () => {
                         <MessageList className="message-list" />
                         <MessageInput className="message-input" />
                     </Window>
-                    <Thread className="thread-container" />
+                    {/* <Thread className="thread-container" /> */}
                 </Channel>
+                
             </Chat>
         </div>
     );
